@@ -19,3 +19,10 @@ jobs:
     - name: Build Docker image
       run: docker build -t hello-world-docker .
 
+    # Run the Docker image
+    - name: Run Docker image
+      run: docker run hello-world-docker
+
+
+
+
