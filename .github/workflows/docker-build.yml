@@ -25,10 +25,6 @@ jobs:
           release_branches: "main"
           custom_tag: "v1.0.0"
 
-      - name: Get tag version
-        id: get_version
-        run: echo "::set-output name=tag_version::$(git describe --tags --abbrev=0)"
-
   build:
     needs: version
     runs-on: ubuntu-latest
@@ -49,6 +45,10 @@ jobs:
       - name: Extract branch name
         id: extract_branch
         run: echo "::set-output name=branch::$(echo ${GITHUB_REF#refs/heads/} | tr / -)"
+      
+      - name: Get tag version
+        id: get_version
+        run: echo "::set-output name=tag_version::$(git describe --tags --abbrev=0)"
 
       - name: Build and push Docker image
         id: docker_build
@@ -58,7 +58,7 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/ai-cicd:latest
-            ${{ secrets.DOCKER_USERNAME }}/ai-cicd:${{ needs.version.outputs.tag_version }}
+            ${{ secrets.DOCKER_USERNAME }}/ai-cicd:${{ steps.get_version.outputs.tag_version }}
             ${{ secrets.DOCKER_USERNAME }}/ai-cicd:${{ steps.extract_branch.outputs.branch }}
 
       - name: Install Trivy
@@ -74,10 +74,3 @@ jobs:
         run: |
           trivy image ${{ secrets.DOCKER_USERNAME }}/ai-cicd:latest
 
-      - name: Run Trivy vulnerability scan on version tag
-        run: |
-          trivy image ${{ secrets.DOCKER_USERNAME }}/ai-cicd:${{ needs.version.outputs.tag_version }}
-
-      - name: Run Trivy vulnerability scan on branch tag
-        run: |
-          trivy image ${{ secrets.DOCKER_USERNAME }}/ai-cicd:${{ steps.extract_branch.outputs.branch }}
