@@ -72,3 +72,4 @@ jobs:
           tag_prefix: "v"
           release_branches: "main"
           custom_tag: "v1.0.0" 
+          
