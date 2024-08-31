@@ -1,28 +1,72 @@
-name: Build and Run Docker Image
+name: CI/CD Pipeline
 
-# Trigger the workflow on push events
 on:
   push:
     branches:
       - main
+      - '*'
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    # Checkout the repository
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    # Build the Docker image
-    - name: Build Docker image
-      run: docker build -t hello-world-docker .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
 
-    # Run the Docker image
-    - name: Run Docker image
-      run: docker run hello-world-docker
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Extract branch name
+        id: extract_branch
+        run: echo "::set-output name=branch::$(echo ${GITHUB_REF#refs/heads/} | tr / -)"
 
+      - name: Build and push Docker image
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/ai-cicd:latest
+            ${{ secrets.DOCKER_USERNAME }}/ai-cicd:${{ steps.extract_branch.outputs.branch }}
 
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
 
+      - name: Run Trivy vulnerability scan on latest tag
+        run: |
+          trivy image ${{ secrets.DOCKER_USERNAME }}/ai-cicd:latest
+
+      - name: Run Trivy vulnerability scan on branch tag
+        run: |
+          trivy image ${{ secrets.DOCKER_USERNAME }}/ai-cicd:${{ steps.extract_branch.outputs.branch }}
+
+  version:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Bump version and push tag
+        id: tag_version
+        uses: anothrNick/github-tag-action@v1.37.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag_prefix: "v"
+          release_branches: "main"
+          custom_tag: "v1.0.0"
