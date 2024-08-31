@@ -7,7 +7,30 @@ on:
       - '*'
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Bump version and push tag
+        id: tag_version
+        uses: anothrNick/github-tag-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag_prefix: "v"
+          release_branches: "main"
+          custom_tag: "v1.0.0"
+
+      - name: Get tag version
+        id: get_version
+        run: echo "::set-output name=tag_version::$(git describe --tags --abbrev=0)"
+
   build:
+    needs: version
     runs-on: ubuntu-latest
 
     steps:
@@ -35,6 +58,7 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/ai-cicd:latest
+            ${{ secrets.DOCKER_USERNAME }}/ai-cicd:${{ needs.version.outputs.tag_version }}
             ${{ secrets.DOCKER_USERNAME }}/ai-cicd:${{ steps.extract_branch.outputs.branch }}
 
       - name: Install Trivy
@@ -50,26 +74,10 @@ jobs:
         run: |
           trivy image ${{ secrets.DOCKER_USERNAME }}/ai-cicd:latest
 
+      - name: Run Trivy vulnerability scan on version tag
+        run: |
+          trivy image ${{ secrets.DOCKER_USERNAME }}/ai-cicd:${{ needs.version.outputs.tag_version }}
+
       - name: Run Trivy vulnerability scan on branch tag
         run: |
           trivy image ${{ secrets.DOCKER_USERNAME }}/ai-cicd:${{ steps.extract_branch.outputs.branch }}
-
-  version:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Bump version and push tag
-        id: tag_version
-        uses: anothrNick/github-tag-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag_prefix: "v"
-          release_branches: "main"
-          custom_tag: "v1.0.0" 
-          
